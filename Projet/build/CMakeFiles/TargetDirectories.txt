@@ -1,0 +1,3 @@
+/home/2ing2/kevin.quach/M2/S2/Archi/TD2-Projet/Projet/build/CMakeFiles/ImageReader.dir
+/home/2ing2/kevin.quach/M2/S2/Archi/TD2-Projet/Projet/build/CMakeFiles/edit_cache.dir
+/home/2ing2/kevin.quach/M2/S2/Archi/TD2-Projet/Projet/build/CMakeFiles/rebuild_cache.dir
