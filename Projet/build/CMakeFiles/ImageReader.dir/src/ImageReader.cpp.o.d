@@ -264,4 +264,24 @@ CMakeFiles/ImageReader.dir/src/ImageReader.cpp.o: \
  /usr/include/c++/10/bits/locale_facets_nonio.tcc \
  /usr/include/c++/10/bits/locale_conv.h /usr/include/c++/10/iomanip \
  /usr/include/c++/10/bits/quoted_string.h /usr/include/c++/10/codecvt \
- /usr/include/c++/10/bits/fs_dir.h /usr/include/c++/10/bits/fs_ops.h
+ /usr/include/c++/10/bits/fs_dir.h /usr/include/c++/10/bits/fs_ops.h \
+ /usr/include/c++/10/set /usr/include/c++/10/bits/stl_tree.h \
+ /usr/include/c++/10/bits/stl_set.h \
+ /usr/include/c++/10/bits/stl_multiset.h /usr/include/c++/10/regex \
+ /usr/include/c++/10/bitset /usr/include/c++/10/iterator \
+ /usr/include/c++/10/bits/stream_iterator.h /usr/include/c++/10/stack \
+ /usr/include/c++/10/deque /usr/include/c++/10/bits/stl_deque.h \
+ /usr/include/c++/10/bits/deque.tcc /usr/include/c++/10/bits/stl_stack.h \
+ /usr/include/c++/10/map /usr/include/c++/10/bits/stl_map.h \
+ /usr/include/c++/10/bits/stl_multimap.h \
+ /usr/include/c++/10/bits/regex_constants.h \
+ /usr/include/c++/10/bits/regex_error.h \
+ /usr/include/c++/10/bits/regex_automaton.h \
+ /usr/include/c++/10/bits/regex_automaton.tcc \
+ /usr/include/c++/10/bits/regex_scanner.h \
+ /usr/include/c++/10/bits/regex_scanner.tcc \
+ /usr/include/c++/10/bits/regex_compiler.h \
+ /usr/include/c++/10/bits/regex_compiler.tcc \
+ /usr/include/c++/10/bits/regex.h /usr/include/c++/10/bits/regex.tcc \
+ /usr/include/c++/10/bits/regex_executor.h \
+ /usr/include/c++/10/bits/regex_executor.tcc
