@@ -2,6 +2,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/video/background_segm.hpp>
 #include <iostream>
 #include <filesystem>
 #include <string>
@@ -15,6 +16,9 @@ namespace fs = std::filesystem;
 int main()
 {
 
+    Ptr<BackgroundSubtractor> pBackSub;
+    pBackSub = createBackgroundSubtractorMOG2();
+
     std::string path = "../../dataset/";
     std::vector<std::string> dataset_path;
     std::set<fs::path> sorted_by_name;
@@ -27,7 +31,7 @@ int main()
     }
 
     std::regex pattern("dataset");
-
+    Mat fgMask;
     for (const auto filepath : sorted_by_name){
         // std::filesystem::path path = file_entry.path();
         // std::cout << path << std::endl;
@@ -41,8 +45,9 @@ int main()
         }
         Mat dst;
         equalizeHist(img, dst);
+        pBackSub->apply(dst, fgMask);
         std::string filename = filepath.filename();
-        imshow("Display window", dst);
+        imshow("Display window", fgMask);
         int k = waitKey(0); // Wait for a keystroke in the window
         
         imwrite(std::regex_replace(image_path, pattern, "outputDataset"), dst);
