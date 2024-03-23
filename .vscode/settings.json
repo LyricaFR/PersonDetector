@@ -65,6 +65,8 @@
         "variant": "cpp",
         "__nullptr": "cpp",
         "set": "cpp",
-        "regex": "cpp"
+        "regex": "cpp",
+        "numbers": "cpp",
+        "semaphore": "cpp"
     }
 }
