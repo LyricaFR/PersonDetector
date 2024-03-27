@@ -3,5 +3,8 @@ project( ImageReader )
 find_package( OpenCV REQUIRED )
 include_directories( ${OpenCV_INCLUDE_DIRS} )
 add_executable( ImageReader ./src/ImageReader.cpp )
-target_link_libraries( ImageReader ${OpenCV_LIBS} )
+
+find_package(OpenMP)
+
+target_link_libraries( ImageReader ${OpenCV_LIBS} OpenMP::OpenMP_CXX)
 set (CMAKE_CXX_FLAGS "-lstdc++fs -std=c++17")
