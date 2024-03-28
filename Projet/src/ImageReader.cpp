@@ -14,7 +14,7 @@ namespace fs = std::filesystem;
 
 // This program is used to denormalize all the images
 
-std::set<fs::path> retrieveVideoImagePaths(){
+std::vector<fs::path> retrieveVideoImagePaths(){
     std::string path = "../../dataset/";
     std::vector<std::string> dataset_path;
     std::set<fs::path> sorted_by_name;
@@ -25,7 +25,8 @@ std::set<fs::path> retrieveVideoImagePaths(){
             sorted_by_name.emplace(file_entry.path());
         }
     }
-    return sorted_by_name;
+    std::vector paths(sorted_by_name.begin(),sorted_by_name.end());
+    return paths;
 }
 
 
@@ -45,11 +46,14 @@ void spotPeople(Mat &fgMask, double &total_time){
 
     Mat labels, stats, centroids;
     int nbcomp = connectedComponentsWithStats(fgMask, labels, stats, centroids, 4, CV_32S);
+    Point pt1, pt2;
+    int area;
+    #pragma omp parallel for firstprivate(pt1,pt2,area) shared(fgMask)
     for (int i = 1; i < nbcomp; i++){  // Start at 1 because 0 is the background.
-        int area = stats.at<int>(i, CC_STAT_AREA);
+        area = stats.at<int>(i, CC_STAT_AREA);
         if (area > 2000){
-            Point pt1 = Point(stats.at<int>(i, CC_STAT_LEFT), stats.at<int>(i, CC_STAT_TOP));
-            Point pt2 = Point(pt1.x + stats.at<int>(i, CC_STAT_WIDTH), pt1.y + stats.at<int>(i, CC_STAT_HEIGHT));
+            pt1 = Point(stats.at<int>(i, CC_STAT_LEFT), stats.at<int>(i, CC_STAT_TOP));
+            pt2 = Point(pt1.x + stats.at<int>(i, CC_STAT_WIDTH), pt1.y + stats.at<int>(i, CC_STAT_HEIGHT));
             // Scalar color = Scalar(255, 255, 0);
             rectangle(fgMask, pt1, pt2, 255);
         }
@@ -58,27 +62,34 @@ void spotPeople(Mat &fgMask, double &total_time){
     total_time += (end_time - start_time);
 }
 
-int main()
-{
+int main(int argc, char *argv[]){
+
+    int nbThreads = 1;
+    if (argc >= 2){
+        nbThreads = std::stoi(argv[1]);
+    }
+    std::cout << "Nb threads : "<< nbThreads << std::endl;
+
 
     double start_time_all = omp_get_wtime();
     double start_time, end_time;
     double total_time_spotPeople = 0, total_time_morphTransform = 0,total_time_equalize = 0, total_time_applyBackgroundRemover = 0;
     double total_time_readImg = 0;
-
+    omp_set_num_threads(nbThreads);
 
     Ptr<BackgroundSubtractor> pBackSub;
     pBackSub = createBackgroundSubtractorMOG2();
 
     // ------- Retrieve all images ------- 
     start_time = omp_get_wtime();
-    std::set<fs::path> sorted_by_name = retrieveVideoImagePaths();
+    std::vector<fs::path> sorted_by_name = retrieveVideoImagePaths();
     end_time = omp_get_wtime();
     std::cout << "Total time taken in retrieveVideoImagePaths() : "<<end_time - start_time << "seconds "<< std::endl;
 
     std::regex pattern("dataset");
     Mat fgMask;
     fs::path current_parent_path = "./";
+    
     
     for (const auto filepath : sorted_by_name){
 
@@ -129,10 +140,10 @@ int main()
         // ----------------------------------------------------------
 
         std::string filename = filepath.filename();
-        imshow("Display window", fgMask);
+        //imshow("Display window", fgMask);
         //int k = waitKey(0.005); // Wait for a keystroke in the window
         
-        //imwrite(std::regex_replace(image_path, pattern, "outputDataset"), dst);
+        imwrite(std::regex_replace(image_path, pattern, "outputDataset"), fgMask);
 
     }
     double end_time_all = omp_get_wtime();
