@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <string>
 #include <set>
+#include <map>
 #include <omp.h>
 #include <regex>
 using namespace cv;
@@ -14,13 +15,20 @@ namespace fs = std::filesystem;
 
 // This program is used to denormalize all the images
 
-std::vector<fs::path> retrieveVideoImagePaths(){
+std::vector<fs::path> retrieveVideoImagePaths(std::map<std::string, int> &mp,std::vector<Ptr<BackgroundSubtractor>> &backgroundSubtractors){
     std::string path = "../../dataset/";
     std::vector<std::string> dataset_path;
     std::set<fs::path> sorted_by_name;
+    int i = 0;
     for (const auto & entry : std::filesystem::directory_iterator{path}){
+
         std::string dirname = entry.path().filename();
+        mp["../../outputDataset/" +dirname] = i;
+        backgroundSubtractors.emplace_back(createBackgroundSubtractorMOG2());
+        i++;
+
         fs::create_directories("../../outputDataset/" + dirname);
+        //#pragma omp parallel for shared(sorted_by_name)
         for (const auto & file_entry : std::filesystem::directory_iterator{entry.path()}){
             sorted_by_name.emplace(file_entry.path());
         }
@@ -31,7 +39,7 @@ std::vector<fs::path> retrieveVideoImagePaths(){
 
 
 void applyMorphTransform(Mat &fgMask,double &total_time_morphTransform){
-    static Mat element = getStructuringElement(MORPH_RECT, Size(3, 3));
+    Mat element = getStructuringElement(MORPH_RECT, Size(3, 3));
 
     double start_time = omp_get_wtime();
     morphologyEx(fgMask, fgMask, MORPH_ERODE, element, Point(-1, -1), 5); 
@@ -48,7 +56,6 @@ void spotPeople(Mat &fgMask, double &total_time){
     int nbcomp = connectedComponentsWithStats(fgMask, labels, stats, centroids, 4, CV_32S);
     Point pt1, pt2;
     int area;
-    #pragma omp parallel for firstprivate(pt1,pt2,area) shared(fgMask)
     for (int i = 1; i < nbcomp; i++){  // Start at 1 because 0 is the background.
         area = stats.at<int>(i, CC_STAT_AREA);
         if (area > 2000){
@@ -74,15 +81,17 @@ int main(int argc, char *argv[]){
     double start_time_all = omp_get_wtime();
     double start_time, end_time;
     double total_time_spotPeople = 0, total_time_morphTransform = 0,total_time_equalize = 0, total_time_applyBackgroundRemover = 0;
-    double total_time_readImg = 0;
+    double total_time_readImg = 0, total_time_writeImg = 0;
     omp_set_num_threads(nbThreads);
 
+    std::map<std::string, int> mp;
+    std::vector<Ptr<BackgroundSubtractor>> backgroundSubtractors;
     Ptr<BackgroundSubtractor> pBackSub;
     pBackSub = createBackgroundSubtractorMOG2();
 
     // ------- Retrieve all images ------- 
     start_time = omp_get_wtime();
-    std::vector<fs::path> sorted_by_name = retrieveVideoImagePaths();
+    std::vector<fs::path> sorted_by_name = retrieveVideoImagePaths(mp,backgroundSubtractors);
     end_time = omp_get_wtime();
     std::cout << "Total time taken in retrieveVideoImagePaths() : "<<end_time - start_time << "seconds "<< std::endl;
 
@@ -90,16 +99,17 @@ int main(int argc, char *argv[]){
     Mat fgMask;
     fs::path current_parent_path = "./";
     
-    
-    for (const auto filepath : sorted_by_name){
+    #pragma omp parallel for firstprivate(fgMask)
+    for (size_t i = 0; i < sorted_by_name.size(); i++) {
+        const auto filepath = sorted_by_name[i];
 
         // Checking if it's still the same scene, if not, create a new BGSubtractor
         fs::path parent_path = filepath.parent_path();
-        if (current_parent_path.compare(parent_path) != 0){
-            std::cout << filepath.parent_path() << std::endl;
+        /*if (current_parent_path.compare(parent_path) != 0){
+            //std::cout << filepath.parent_path() << std::endl;
             current_parent_path = parent_path;
             pBackSub = createBackgroundSubtractorMOG2();
-        }
+        }*/
 
         // ------- Read Image ------- 
 
@@ -109,8 +119,10 @@ int main(int argc, char *argv[]){
         if(img.empty())
         {
             std::cout << "Could not read the image: " << image_path << std::endl;
-            return 1;
-        }
+            //return 1;
+        } else {
+
+        
 
         end_time = omp_get_wtime();
         total_time_readImg += (end_time - start_time);
@@ -125,12 +137,12 @@ int main(int argc, char *argv[]){
 
         // ------- Apply background remover ------- 
         start_time = omp_get_wtime();
-        pBackSub->apply(dst, fgMask);
+        backgroundSubtractors[mp[parent_path]]->apply(dst, fgMask);
         end_time = omp_get_wtime();
-        total_time_applyBackgroundRemover += (end_time - start_time);
+        total_time_applyBackgroundRemover += (end_time - start_time); // */
 
         // ------- Removing noise with morphological transformation -------
-
+        fgMask = dst;
         applyMorphTransform(fgMask,total_time_morphTransform);
 
         // ------- Looking for ppl among connected components -------
@@ -143,16 +155,21 @@ int main(int argc, char *argv[]){
         //imshow("Display window", fgMask);
         //int k = waitKey(0.005); // Wait for a keystroke in the window
         
+        start_time = omp_get_wtime();
         imwrite(std::regex_replace(image_path, pattern, "outputDataset"), fgMask);
+        end_time = omp_get_wtime();
+        total_time_writeImg += (end_time - start_time);  /// */
+        }
 
     }
     double end_time_all = omp_get_wtime();
 
-    std::cout << "Total time taken for reading Image : "<<total_time_readImg << "seconds "<< std::endl;
+    std::cout << "Total time taken for reading image : "<<total_time_readImg << "seconds "<< std::endl;
     std::cout << "Total time taken for equalizeHist() : "<<total_time_equalize << "seconds "<< std::endl;
     std::cout << "Total time taken for background Remover : "<<total_time_applyBackgroundRemover << "seconds "<< std::endl;
     std::cout << "Total time taken in  applyMorphTransform() : "<<total_time_morphTransform << "seconds "<< std::endl;
     std::cout << "Total time taken in  spotPeople() : "<<total_time_spotPeople << "seconds "<< std::endl;
+    std::cout << "Total time taken for writing image : "<<total_time_writeImg << "seconds "<< std::endl;
     std::cout << "========================== \n Total time taken overall : "<<end_time_all - start_time_all << "seconds "<< std::endl;
 
     return 0;
