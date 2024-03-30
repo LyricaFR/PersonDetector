@@ -65,6 +65,7 @@ int main(int argc, char *argv[]) {
     }
 
     omp_set_num_threads(nbThreads);  // Setting the number of threads.
+    int nbChunks = 96; // Number of chunk for iteration distribution
 
     std::cout << "Nb threads : " << nbThreads << std::endl;
 
@@ -89,7 +90,7 @@ int main(int argc, char *argv[]) {
 
     start_time = omp_get_wtime();
 
-    #pragma omp parallel for private(image_path)
+    #pragma omp parallel for private(image_path) schedule(dynamic, nbChunks)
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
         // ------- Read Image -------
         image_path = samples::findFile(sorted_by_name[i]);
@@ -112,7 +113,7 @@ int main(int argc, char *argv[]) {
 
     start_time = omp_get_wtime();
     
-    #pragma omp parallel for private(start_time, end_time)
+    #pragma omp parallel for schedule(dynamic, nbChunks)
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
         if (valid_imgs[i]) {
             equalizeHist(imgs[i], imgs[i]);
@@ -130,6 +131,7 @@ int main(int argc, char *argv[]) {
     start_time = omp_get_wtime();
 
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
+        
         if (valid_imgs[i]) {
             const auto filepath = sorted_by_name[i];
 
@@ -151,7 +153,8 @@ int main(int argc, char *argv[]) {
     // ------- Removing noise with morphological transformation -------
     Mat element = getStructuringElement(MORPH_RECT, Size(3, 3));
     start_time = omp_get_wtime();
-    #pragma omp parallel for
+
+    #pragma omp parallel for schedule(dynamic, nbChunks)
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
         if (valid_imgs[i]) {
 
@@ -165,7 +168,7 @@ int main(int argc, char *argv[]) {
 
     // ------- Looking for ppl among connected components -------    
     start_time = omp_get_wtime();
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(dynamic, nbChunks)
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
         if (valid_imgs[i]) {
             spotPeople(imgs[i], total_time_spotPeople);
@@ -177,9 +180,10 @@ int main(int argc, char *argv[]) {
 
     // ------- Read and Save Image ------- */
     start_time = omp_get_wtime();
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(dynamic, nbChunks)
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
         if (valid_imgs[i]) {
+
             // std::string filename = sorted_by_name[i].filename();
             // imshow("Display window", imgs[i]);
             // int k = waitKey(0); // Wait for a keystroke in the window
