@@ -63,13 +63,15 @@ int main(int argc, char *argv[]) {
     if (argc >= 2) {
         nbThreads = std::stoi(argv[1]);
     }
+
+    omp_set_num_threads(nbThreads);  // Setting the number of threads.
+
     std::cout << "Nb threads : " << nbThreads << std::endl;
 
     double start_time_all = omp_get_wtime();
     double start_time, end_time;
     double total_time_spotPeople = 0, total_time_morphTransform = 0, total_time_equalize = 0, total_time_applyBackgroundRemover = 0;
     double total_time_readImg = 0, total_time_writeImg = 0;
-    omp_set_num_threads(nbThreads);
 
     // ------- Retrieve all images -------
     start_time = omp_get_wtime();
@@ -86,9 +88,9 @@ int main(int argc, char *argv[]) {
     std::string image_path;
 
     start_time = omp_get_wtime();
-#pragma omp parallel for private(image_path)
+
+    #pragma omp parallel for private(image_path)
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
-        // Checking if it's still the same scene, if not, create a new BGSubtractor
         // ------- Read Image -------
         image_path = samples::findFile(sorted_by_name[i]);
         imgs[i] = imread(image_path, IMREAD_GRAYSCALE);
@@ -100,21 +102,25 @@ int main(int argc, char *argv[]) {
             valid_imgs[i] = true;
         }
     }
+
     end_time = omp_get_wtime();
-    total_time_readImg += (end_time - start_time);
+    total_time_readImg = (end_time - start_time);
     std::cout << "Total time taken for reading image : " << total_time_readImg << "seconds " << std::endl;
 
 
     // ------- Equalize Image -------
+
     start_time = omp_get_wtime();
-#pragma omp parallel for private(start_time, end_time)
+    
+    #pragma omp parallel for private(start_time, end_time)
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
         if (valid_imgs[i]) {
             equalizeHist(imgs[i], imgs[i]);
         }
     }
+
     end_time = omp_get_wtime();
-    total_time_equalize += (end_time - start_time);
+    total_time_equalize = (end_time - start_time);
     std::cout << "Total time taken for equalizeHist() : " << total_time_equalize << "seconds " << std::endl;
 
     // ------- Apply background remover -------
@@ -138,14 +144,14 @@ int main(int argc, char *argv[]) {
         }
     }
     end_time = omp_get_wtime();
-    total_time_applyBackgroundRemover += (end_time - start_time); 
+    total_time_applyBackgroundRemover = (end_time - start_time); 
 
     std::cout << "Total time taken for background Remover : " << total_time_applyBackgroundRemover << "seconds " << std::endl;
      
     // ------- Removing noise with morphological transformation -------
     Mat element = getStructuringElement(MORPH_RECT, Size(3, 3));
     start_time = omp_get_wtime();
-#pragma omp parallel for
+    #pragma omp parallel for
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
         if (valid_imgs[i]) {
 
@@ -159,7 +165,7 @@ int main(int argc, char *argv[]) {
 
     // ------- Looking for ppl among connected components -------    
     start_time = omp_get_wtime();
-#pragma omp parallel for
+    #pragma omp parallel for
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
         if (valid_imgs[i]) {
             spotPeople(imgs[i], total_time_spotPeople);
@@ -171,11 +177,11 @@ int main(int argc, char *argv[]) {
 
     // ------- Read and Save Image ------- */
     start_time = omp_get_wtime();
-#pragma omp parallel for
+    #pragma omp parallel for
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
         if (valid_imgs[i]) {
             // std::string filename = sorted_by_name[i].filename();
-            // imshow("Display window", fgMask);
+            // imshow("Display window", imgs[i]);
             // int k = waitKey(0); // Wait for a keystroke in the window
 
             imwrite(std::regex_replace(samples::findFile(sorted_by_name[i]), pattern, "outputDataset"), imgs[i]);
