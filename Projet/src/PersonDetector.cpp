@@ -1,5 +1,4 @@
 #include <omp.h>
-
 #include <filesystem>
 #include <iostream>
 #include <map>
@@ -15,16 +14,19 @@
 using namespace cv;
 namespace fs = std::filesystem;
 
-// This program is used to denormalize all the images
-
-std::vector<fs::path> retrieveVideoImagePaths() {
-    std::string path = "../../dataset/";
+/**
+ * @brief Retrieve the path of the images contained in the directory at the path given and return them in a set
+ * @param path The path where to directory with subdirectories containing image
+*/
+std::vector<fs::path> retrieveVideoImagePaths(std::string path) {
     std::vector<std::string> dataset_path;
     std::set<fs::path> sorted_by_name;
     for (const auto &entry : std::filesystem::directory_iterator{path}) {
+
+        // Retrieve directory names
         std::string dirname = entry.path().filename();
 
-        fs::create_directories("../../outputDataset/" + dirname);
+        // Retrieve filepath in each directory
         for (const auto &file_entry : std::filesystem::directory_iterator{entry.path()}) {
             sorted_by_name.emplace(file_entry.path());
         }
@@ -33,29 +35,46 @@ std::vector<fs::path> retrieveVideoImagePaths() {
     return paths;
 }
 
-void applyMorphTransform(Mat &fgMask, Mat &element) {
-    morphologyEx(fgMask, fgMask, MORPH_ERODE, element, Point(-1, -1), 5);
-    morphologyEx(fgMask, fgMask, MORPH_DILATE, element, Point(-1, -1), 8);
+/**
+ * @brief Create directories in outputPath with the same name as the ones in path
+ * @param path The path containing the directories
+ * @param outputPath The path where to create the directories
+*/
+void createOutputDirectory(std::string path, std::string outputPath){
+    for (const auto &entry : std::filesystem::directory_iterator{path}) {
+        std::string dirname = entry.path().filename();
+        fs::create_directories(outputPath + dirname);
+    }
 }
 
-void spotPeople(Mat &fgMask, double &total_time) {
-    double start_time = omp_get_wtime();
+/**
+ * @brief Remove small noise in the image through morphological transformations using a structuring element
+ * @param img The image on which to perform the morphological transformations
+ * @param element The structuring element to use for the morphological transformations
+*/
+void removeNoise(Mat &img, Mat &element) {
+    morphologyEx(img, img, MORPH_ERODE, element, Point(-1, -1), 5);
+    morphologyEx(img, img, MORPH_DILATE, element, Point(-1, -1), 8);
+}
 
+/**
+ * @brief Detect connected components whose area is above a certain threshold and frame them
+ * @param img The image that we want to process
+ * @param threshold The area threshold
+*/
+void spotPeople(Mat &img, int threshold) {
     Mat labels, stats, centroids;
-    int nbcomp = connectedComponentsWithStats(fgMask, labels, stats, centroids, 4, CV_32S);
+    int nbcomp = connectedComponentsWithStats(img, labels, stats, centroids, 4, CV_32S);
     Point pt1, pt2;
     int area;
     for (int i = 1; i < nbcomp; i++) {  // Start at 1 because 0 is the background.
         area = stats.at<int>(i, CC_STAT_AREA);
-        if (area > 2000) {
+        if (area > threshold) {
             pt1 = Point(stats.at<int>(i, CC_STAT_LEFT), stats.at<int>(i, CC_STAT_TOP));
             pt2 = Point(pt1.x + stats.at<int>(i, CC_STAT_WIDTH), pt1.y + stats.at<int>(i, CC_STAT_HEIGHT));
-            // Scalar color = Scalar(255, 255, 0);
-            rectangle(fgMask, pt1, pt2, 255);
+            rectangle(img, pt1, pt2, 255);
         }
     }
-    double end_time = omp_get_wtime();
-    total_time += (end_time - start_time);
 }
 
 int main(int argc, char *argv[]) {
@@ -63,6 +82,10 @@ int main(int argc, char *argv[]) {
     if (argc >= 2) {
         nbThreads = std::stoi(argv[1]);
     }
+
+    std::string inputPath = "../../dataset/";
+    std::string outputPath = "../../outputDataset/";
+    std::string outputDir = "outputDataset";
 
     omp_set_num_threads(nbThreads);  // Setting the number of threads.
     int nbChunks = 96; // Number of chunk for iteration distribution
@@ -76,7 +99,7 @@ int main(int argc, char *argv[]) {
 
     // ------- Retrieve all images -------
     start_time = omp_get_wtime();
-    std::vector<fs::path> sorted_by_name = retrieveVideoImagePaths();
+    std::vector<fs::path> sorted_by_name = retrieveVideoImagePaths(inputPath);
     end_time = omp_get_wtime();
     std::cout << "Total time taken in retrieveVideoImagePaths() : " << end_time - start_time << "seconds " << std::endl;
 
@@ -158,20 +181,20 @@ int main(int argc, char *argv[]) {
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
         if (valid_imgs[i]) {
 
-            applyMorphTransform(imgs[i], element);
+            removeNoise(imgs[i], element);
         }
     }
 
     end_time = omp_get_wtime();
     total_time_morphTransform = (end_time - start_time);
-    std::cout << "Total time taken in  applyMorphTransform() : " << total_time_morphTransform << "seconds " << std::endl;
+    std::cout << "Total time taken in  removeNoise() : " << total_time_morphTransform << "seconds " << std::endl;
 
     // ------- Looking for ppl among connected components -------    
     start_time = omp_get_wtime();
     #pragma omp parallel for schedule(dynamic, nbChunks)
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
         if (valid_imgs[i]) {
-            spotPeople(imgs[i], total_time_spotPeople);
+            spotPeople(imgs[i], 2000);
         }
     }
     end_time = omp_get_wtime();
@@ -179,16 +202,24 @@ int main(int argc, char *argv[]) {
     std::cout << "Total time taken in  spotPeople() : " << total_time_spotPeople << "seconds " << std::endl;
 
     // ------- Read and Save Image ------- */
+
+    // Creating the output directories
+    createOutputDirectory(inputPath,  outputPath);
+
     start_time = omp_get_wtime();
     #pragma omp parallel for schedule(dynamic, nbChunks)
     for (size_t i = 0; i < sorted_by_name.size(); i++) {
         if (valid_imgs[i]) {
 
+            // ------- Uncomment to display images -------
+
             // std::string filename = sorted_by_name[i].filename();
             // imshow("Display window", imgs[i]);
             // int k = waitKey(0); // Wait for a keystroke in the window
 
-            imwrite(std::regex_replace(samples::findFile(sorted_by_name[i]), pattern, "outputDataset"), imgs[i]);
+            // -------------------------------------------
+
+            imwrite(std::regex_replace(samples::findFile(sorted_by_name[i]), pattern, outputDir), imgs[i]);
 
         }
     }            
